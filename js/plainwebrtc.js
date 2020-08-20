@@ -14,13 +14,13 @@ function enableChat(){
 }
 enableChat();
 
-navigator.mediaDevices.getUserMedia({audio:true,video:true}).then(stream=>{
-	localStream = stream;
-	micused.innerHTML = localStream.getAudioTracks()[0].label;
-	pc.addStream(stream);
-	local.src = URL.createObjectURL(stream);
-	local.muted=true;
-}).catch(errHandler);
+//navigator.mediaDevices.getUserMedia({audio:true,video:true}).then(stream=>{
+//	localStream = stream;
+//	micused.innerHTML = localStream.getAudioTracks()[0].label;
+//	pc.addStream(stream);
+//	local.src = URL.createObjectURL(stream);
+//	local.muted=true;
+//}).catch(errHandler);
 
 function sendMsg(){
 	var text = sendTxt.value;
@@ -76,7 +76,9 @@ remoteOfferGot.onclick = function(){
 			}
 	}).catch(errHandler);	
 }
+
 localOfferSet.onclick = function(){
+	console.log("Hello");
 	if(chatEnabled){
 		_chatChannel = pc.createDataChannel('chatChannel');
 		_fileChannel = pc.createDataChannel('fileChannel');
@@ -115,6 +117,7 @@ fileTransfer.onchange = function(e){
 		console.log('No file selected');
 	}
 }
+
 function sendFile(){
 	if(!fileTransfer.value)return;
 	var fileInfo = JSON.stringify(sendFileDom);
@@ -124,10 +127,11 @@ function sendFile(){
 
 
 function fileChannel(e){
-	_fileChannel.onopen = function(e){
+	_fileChannel.onopen = function(e) {
 		console.log('file channel is open',e);
 	}
-	_fileChannel.onmessage = function(e){
+
+	_fileChannel.onmessage = function(e) {
 		// Figure out data type
 		var type = Object.prototype.toString.call(e.data),data;
 		if(type == "[object ArrayBuffer]"){
@@ -171,6 +175,7 @@ function fileChannel(e){
 			console.log('_fileChannel: ',data.fileInfo);
 		}	
 	}
+
 	_fileChannel.onclose = function(){
 		console.log('file channel closed');
 	}
@@ -180,25 +185,54 @@ function chatChannel(e){
 	_chatChannel.onopen = function(e){
 		console.log('chat channel is open',e);
 	}
+
 	_chatChannel.onmessage = function(e){
 		chat.innerHTML = chat.innerHTML + "<pre>"+ e.data + "</pre>"
 	}
+
 	_chatChannel.onclose = function(){
 		console.log('chat channel closed');
 	}
 }
 
+function log_progress(progress, elapsed) {
+	console.log("progress: " + progress);
+	console.log("percentage: " + progress/sendFileDom.size * 100 + "%")
+	console.log("rate: " + progress/elapsed/(1<<10) + "kB/s");
+}
+
+
+var arsh_counter = 0;
+function log_rate(progress, elapsed) {
+	arsh_counter += 1;
+	arsh_counter %= 100;
+	if (!arsh_counter) {
+		console.log("rate: " + progress/elapsed + "B/s");
+	}
+}
+
 function sendFileinChannel(){
   var chunkSize = 16384;
+	var chunkSize = (1 << 10) * (1 << 4);
+	var start = new Date().getTime();
   var sliceFile = function(offset) {
     var reader = new window.FileReader();
     reader.onload = (function() {
       return function(e) {
+      	if (_fileChannel.readyState !== "open") {
+					// window.setTimeout(sliceFile, 0, offset + chunkSize);
+					return;
+				}
         _fileChannel.send(e.target.result);
         if (file.size > offset + e.target.result.byteLength) {
           window.setTimeout(sliceFile, 0, offset + chunkSize);
         }
-        sendFileProg.value= offset + e.target.result.byteLength
+        var bytesRead = e.target.result.byteLength;
+				var elapsed = new Date().getTime() - start;
+				var progress = offset + bytesRead;
+				sendFileProg.value= progress;
+				//log_progress(progress, elapsed);
+				log_rate(progress, elapsed);
       };
     })(file);
     var slice = file.slice(offset, offset + chunkSize);
