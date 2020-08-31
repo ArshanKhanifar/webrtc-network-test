@@ -8,11 +8,22 @@
 		}
 	</style>
 </head>
+<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
 <body>
 <div>
 	<input type="checkbox" id="enable_chat" onclick="enableChat()" checked> Enable chat
 	<span id=micused style="right:0;position:fixed;"></span>
 </div>
+
+<div>
+	<h3>Role</h3>
+	<p id="connectionStatus">loading...</p>
+	<div id="connectionLoading" class="spinner-border text-info" role="status">
+		<span class="sr-only">Connecting...</span>
+	</div>
+	<button id="connectionSuccess" type="button" class="btn btn-success">Successfully Connected</button>
+</div>
+
 
 <div>
 	<h4>LocalStream</h4>
@@ -21,12 +32,12 @@
 	<br>
 	<!-- <input type="checkbox" id="enable_mic" checked>Microphone -->
 </div>
-<div>
+<div >
 	<p>
 		<video width=250 id=local controls autoplay></video>
 		Local
 		<textarea rows="4" cols="50"  id=localOffer></textarea>
-		<button id=localOfferSet>CreateOfferPeePee</button>
+		<button id=localOfferSet>Create Offer</button>
 	</p>	
 </div>
 <div>
@@ -50,17 +61,22 @@
 	File transfer:
 	</p>
 	<div>
+		<p>TX</p>
 		<progress value="0" id="sendFileProg"></progress>
 		<input type="file" name="" id=fileTransfer>
 		<button type="submit" onclick="sendFile()">send</button>			
 	</div>
 	<div>
 		<p>
+			<p>RX</p>
 			<progress value="0" id="recFileProg"></progress>
 			<a href="" id=file_download></a>
 		</p>
 	</div>
 </div>
-<script src="js/plainwebrtc.js"></script>
+<script src="static/js/plainwebrtc.js"></script>
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js" integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js" integrity="sha384-9/reFTGAW83EW2RDu2S0VKaIzap3H66lZH81PoYlFhbGU+6BZp6G7niu735Sk7lN" crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js" integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV" crossorigin="anonymous"></script>
 </body>
 </html>
