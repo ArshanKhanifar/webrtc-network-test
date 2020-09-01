@@ -11,11 +11,6 @@
 <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
 <body>
 <div>
-	<input type="checkbox" id="enable_chat" onclick="enableChat()" checked> Enable chat
-	<span id=micused style="right:0;position:fixed;"></span>
-</div>
-
-<div>
 	<h3>Role</h3>
 	<p id="connectionStatus">loading...</p>
 	<div id="connectionLoading" class="spinner-border text-info" role="status">
@@ -24,30 +19,6 @@
 	<button id="connectionSuccess" type="button" class="btn btn-success">Successfully Connected</button>
 </div>
 
-
-<div>
-	<h4>LocalStream</h4>
-	<input type="checkbox" id="enableAudioFile">Audio File
-	<input type="file" id="streamAudioFile">	
-	<br>
-	<!-- <input type="checkbox" id="enable_mic" checked>Microphone -->
-</div>
-<div >
-	<p>
-		<video width=250 id=local controls autoplay></video>
-		Local
-		<textarea rows="4" cols="50"  id=localOffer></textarea>
-		<button id=localOfferSet>Create Offer</button>
-	</p>	
-</div>
-<div>
-	<p>
-		<video width=250 id=remote controls autoplay></video>
-		Remote
-		<textarea id="remoteOffer" rows="4" cols="50" placeholder="Paste remote SDP"></textarea>
-		<button id=remoteOfferGot>Answer</button>
-	</p>	
-</div>
 <div id="chat" style="overflow:scroll;"></div>
 <div>
 	<br><br>
@@ -60,18 +31,16 @@
 	<p>
 	File transfer:
 	</p>
-	<div>
+	<div id="fileTX">
 		<p>TX</p>
-		<progress value="0" id="sendFileProg"></progress>
-		<input type="file" name="" id=fileTransfer>
-		<button type="submit" onclick="sendFile()">send</button>			
+		<input type="file" name="" id="fileTransferInput">
+		<button type="submit" onclick="sendFile()">send</button>
+		<br>
 	</div>
-	<div>
-		<p>
-			<p>RX</p>
-			<progress value="0" id="recFileProg"></progress>
-			<a href="" id=file_download></a>
-		</p>
+	<div id="fileRX">
+		<p>RX</p>
+		<a href="" id=file_download></a>
+		<br>
 	</div>
 </div>
 <script src="static/js/plainwebrtc.js"></script>

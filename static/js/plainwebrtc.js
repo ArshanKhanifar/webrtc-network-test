@@ -1,9 +1,9 @@
-const NUM_FILE_CHANNELS = 1;
+const NUM_FILE_CHANNELS = 2;
 var conf = {iceServers: [{urls: []}]};
 var pc = new RTCPeerConnection(conf);
 var localStream, _fileChannels = [], context,source,
 	_chatChannel,sendFileDom = {}, 
-	recFileDom={},receiveBuffer=[],
+	recFileDom={},
 	receivedSize=0,
 	file,
 	bytesPrev=0;
@@ -162,7 +162,6 @@ pc.onicecandidate = async function(e) {
 	if(!cand){
 		var data = pc.localDescription;
 		logger.debug(`iceGatheringState complete: ${data.sdp}`);
-		localOffer.value = JSON.stringify(data);
 		try {
 			if (data.type === "offer") {
 				var result = await httpPostJSON(ENDPOINTS.OFFER, data);
@@ -200,7 +199,6 @@ pc.oniceconnectionstatechange = async function() {
 
 pc.onaddstream = function(e){
 	console.log('remote onaddstream', e.stream);
-	remote.src = URL.createObjectURL(e.stream);
 };
 
 pc.onconnection = function(e){
@@ -217,24 +215,26 @@ async function processRemoteOfferAndGetAnswer(offer) {
 	return answer;
 }
 
-remoteOfferGot.onclick = async function(){
-	var secret = new RTCSessionDescription(JSON.parse(remoteOffer.value));
-	if(secret.type == "offer"){
-		await processRemoteOfferAndGetAnswer(secret);
-	} else {
-		await pc.setRemoteDescription(secret);
-	}
-};
-
-localOfferSet.onclick = function(){
-	createWebRtcOffer();
-};
+function addProgressBar(channel) {
+	var tx_node = document.createElement("progress");
+	tx_node.value = 0;
+	var rx_node = document.createElement("progress");
+	rx_node.value = 0;
+	var transferRateLabel = document.createElement("span");
+	channel.transferRateLabel = transferRateLabel;
+	channel.txProgressBar = tx_node;
+	channel.rxProgressBar = rx_node;
+	fileTX.appendChild(tx_node);
+	fileTX.appendChild(transferRateLabel);
+	fileTX.appendChild(document.createElement("br"));
+	fileRX.appendChild(rx_node);
+	fileRX.appendChild(document.createElement("br"));
+}
 
 function setupChannels() {
 	_chatChannel = pc.createDataChannel('chatChannel');
 	for (var i = 0 ; i < NUM_FILE_CHANNELS; i++) {
 		var channel = pc.createDataChannel('fileChannel-' + i);
-		channel.chunk_counter = 0;
 		_fileChannels.push(channel);
 		setupFileChannel(channel);
 	}
@@ -249,9 +249,8 @@ async function createWebRtcOffer() {
 		setTimeout(function(){
 			if(pc.iceGatheringState == "complete"){
 				return;
-			}else{
+			} else{
 				console.log('after GetherTimeout');
-				localOffer.value = JSON.stringify(pc.localDescription);
 			}
 		},2000);
 		console.log('setLocalDescription ok');
@@ -262,8 +261,8 @@ async function createWebRtcOffer() {
 }
 
 //File transfer
-fileTransfer.onchange = function(e){
-	var files = fileTransfer.files;
+fileTransferInput.onchange = function(e){
+	var files = fileTransferInput.files;
 	if(files.length > 0){
 		file=files[0];
 		sendFileDom.name=file.name;
@@ -276,10 +275,10 @@ fileTransfer.onchange = function(e){
 	}
 }
 
-function sendFile(){
-	if(!fileTransfer.value)return;
+function sendFile() {
+	if(!fileTransferInput.value)return;
 	var fileInfo = JSON.stringify(sendFileDom);
-	fileInfo.size = fileInfo.size / _fileChannels.length;
+	fileInfo.size = fileInfo.size;
 	for (var i in _fileChannels) {
 		channel = _fileChannels[i];
 		if (channel.send) {
@@ -290,6 +289,12 @@ function sendFile(){
 }
 
 function setupFileChannel(channel){
+	channel.chunk_counter = 0;
+	channel.receivedBuffer = [];
+	channel.receivedSize = 0;
+
+	addProgressBar(channel);
+
 	channel.onopen = function(e) {
 		console.log('file channel' + channel.label + ' is open:', e);
 	};
@@ -299,40 +304,31 @@ function setupFileChannel(channel){
 		var type = Object.prototype.toString.call(e.data),data;
 		if(type == "[object ArrayBuffer]"){
 			data = e.data;
-			receiveBuffer.push(data);
-			receivedSize += data.byteLength;
-			recFileProg.value = receivedSize;
-			if(receivedSize == recFileDom.size){
-				var received = new window.Blob(receiveBuffer);
+			//channel.receivedBuffer.push(data);
+			channel.receivedSize += data.byteLength;
+			channel.rxProgressBar.value = channel.receivedSize;
+			if(channel.receivedSize == recFileDom.size){
+				var received = new window.Blob(channel.receivedBuffer);
 				file_download.href=URL.createObjectURL(received);
 				file_download.innerHTML="download";
 				file_download.download = recFileDom.name;
 				// rest
-				receiveBuffer = [];
+				channel.receivedBuffer = [];
 				receivedSize = 0;
 				// clearInterval(window.timer);	
 			}
 		} else if(type == "[object String]") {
 			data = JSON.parse(e.data);
-		} else if(type == "[object Blob]") {
-			data = e.data;
-			file_download.href = URL.createObjectURL(data);
-			file_download.innerHTML = "download";
-			file_download.download = recFileDom.name;
 		}
 
-		// Handle initial msg exchange
 		if(data.fileInfo){
 			if(data.fileInfo == "areYouReady"){
 				recFileDom = data;
-				recFileProg.max=data.size;
+				channel.rxProgressBar.max = data.size;
 				var sendData = JSON.stringify({fileInfo:"readyToReceive"});
 				channel.send(sendData);
-				// window.timer = setInterval(function(){
-				// 	Stats();
-				// },1000)
 			} else if(data.fileInfo == "readyToReceive"){
-				sendFileProg.max = sendFileDom.size;
+				channel.txProgressBar.max = sendFileDom.size;
 				sendFileinChannel(channel);
 			}
 			console.log('_fileChannel: ', data.fileInfo);
@@ -368,13 +364,14 @@ function log_rate(channel, progress, elapsed) {
 	channel.chunk_counter += 1;
 	channel.chunk_counter %= 2;
 	if (!channel.chunk_counter) {
-		console.log(channel.label + " rate: " + progress/elapsed + "B/s");
+		var rate = ((progress/elapsed)*1e3/(1<<20)).toFixed(2) + "MB/s";
+		console.log(channel.label + " rate: " + rate);
+		channel.transferRateLabel.innerText = rate;
 	}
 }
 
 function sendFileinChannel(channel){
-  var chunkSize = 16384;
-	var chunkSize = (1 << 10) * (1 << 4);
+	var chunkSize = (1 << 10) * (1 << 3);
 	var start = new Date().getTime();
   var sliceFile = function(offset) {
     var reader = new window.FileReader();
@@ -392,8 +389,7 @@ function sendFileinChannel(channel){
         var bytesRead = e.target.result.byteLength;
 				var elapsed = new Date().getTime() - start;
 				var progress = offset + bytesRead;
-				sendFileProg.value = progress;
-				//log_progress(progress, elapsed);
+				channel.txProgressBar.value = progress;
 				log_rate(channel, progress, elapsed);
       };
     })(file);
@@ -417,74 +413,4 @@ function Stats(){
       }
     }
 	});
-}
-
-streamAudioFile.onchange = function(){
-	console.log('streamAudioFile');
-	context = new AudioContext();
-  var file = streamAudioFile.files[0];
-  if (file) {
-    if (file.type.match('audio*')) {
-      var reader = new FileReader();
-        reader.onload = (function(readEvent) {
-          context.decodeAudioData(readEvent.target.result, function(buffer) {
-            // create an audio source and connect it to the file buffer
-            source = context.createBufferSource();
-            source.buffer = buffer;
-            source.start(0);
- 
-            // connect the audio stream to the audio hardware
-            source.connect(context.destination);
- 
-            // create a destination for the remote browser
-            var remote = context.createMediaStreamDestination();
- 
-            // connect the remote destination to the source
-            source.connect(remote);
- 
-			 			local.srcObject = remote.stream
-						local.muted=true;
-            // add the stream to the peer connection
-            pc.addStream(remote.stream);
- 
-            // create a SDP offer for the new stream
-            // pc.createOffer(setLocalAndSendMessage);
-          });
-        });
- 
-      reader.readAsArrayBuffer(file);
-    }
-  }	
-}
-
-var audioRTC = function (cb){
-  console.log('streamAudioFile');
-  window.context = new AudioContext();
-  var file = streamAudioFile.files[0];
-  if (file) {
-    if (file.type.match('audio*')) {
-      var reader = new FileReader();
-        reader.onload = (function(readEvent) {
-          context.decodeAudioData(readEvent.target.result, function(buffer) {
-            // create an audio source and connect it to the file buffer
-            var source = context.createBufferSource();
-            source.buffer = buffer;
-            source.start(0);
-  
-            // connect the audio stream to the audio hardware
-            source.connect(context.destination);
- 
-            // create a destination for the remote browser
-            var remote = context.createMediaStreamDestination();
- 
-            // connect the remote destination to the source
-            source.connect(remote);
-            window.localStream = remote.stream;
-            cb({'status':'success','stream':true});
-          });
-        });
- 
-      reader.readAsArrayBuffer(file);
-    }
-  } 
 }
