@@ -1,6 +1,6 @@
 const NUM_FILE_CHANNELS = 1;
 const CHUNK_SIZE = (1 << 10) * (1 << 6);
-const HIGH_WATERMARK = (1 << 24);
+const HIGH_WATERMARK = CHUNK_SIZE * 10;
 var conf = {iceServers: [{urls: []}]};
 var pc = new RTCPeerConnection(conf);
 var localStream, _fileChannels = [], context,source,
@@ -377,15 +377,19 @@ function log_rate(channel, progress, elapsed) {
 	channel.chunk_counter += 1;
 	channel.chunk_counter %= 2;
 	if (!channel.chunk_counter) {
-		var rate = ((progress/elapsed)*1e3/(1<<20)).toFixed(2) + "MB/s";
+		var rate = ((progress/elapsed)*1e3/(1<<20)*8).toFixed(2) + "Mbps";
 		console.log(channel.label + " rate: " + rate);
 		channel.transferRateLabel.innerText = rate;
 	}
 }
 
+const WINDOW_SIZE = 10;
+
 function sendFileinChannel(channel){
 	var chunkSize = CHUNK_SIZE;
 	var start = averageSpeedCalculation.start = new Date().getTime();
+	var counter = 0;
+	var byteCounter = 0;
   var sliceFile = function(offset) {
     var reader = new window.FileReader();
     reader.onload = (function() {
@@ -408,11 +412,17 @@ function sendFileinChannel(channel){
 					averageSpeed.innerHTML = rate;
         	console.log("Done sending!");
 				}
-        var bytesRead = fp.target.result.byteLength;
-				var elapsed = new Date().getTime() - start;
-				var progress = offset + bytesRead;
-				channel.txProgressBar.value = progress;
-				log_rate(channel, progress, elapsed);
+				var bytesRead = fp.target.result.byteLength;
+        counter += 1;
+				byteCounter += bytesRead;
+        if (counter >= WINDOW_SIZE) {
+        	counter = 0;
+					var elapsed = new Date().getTime() - start;
+					start = new Date().getTime();
+					log_rate(channel, byteCounter, elapsed);
+					byteCounter = 0;
+				}
+				channel.txProgressBar.value = offset + bytesRead;
       };
     })(file);
     var slice = file.slice(offset, offset + chunkSize);

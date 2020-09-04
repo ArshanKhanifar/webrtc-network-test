@@ -44,6 +44,5 @@ def app_entry():
     return app.send_static_file("index.html")
 
 
+app.run("192.168.2.19", port=8000)
 
-
-app.run(port=8000)
