@@ -1,4 +1,6 @@
-const NUM_FILE_CHANNELS = 2;
+const NUM_FILE_CHANNELS = 1;
+const CHUNK_SIZE = (1 << 10) * (1 << 6);
+const HIGH_WATERMARK = (1 << 24);
 var conf = {iceServers: [{urls: []}]};
 var pc = new RTCPeerConnection(conf);
 var localStream, _fileChannels = [], context,source,
@@ -7,6 +9,11 @@ var localStream, _fileChannels = [], context,source,
 	receivedSize=0,
 	file,
 	bytesPrev=0;
+
+var averageSpeedCalculation = {
+	start: null,
+	end: null
+};
 
 var ROLE = null, AUTOMATED = true;
 
@@ -232,7 +239,9 @@ function addProgressBar(channel) {
 }
 
 function setupChannels() {
-	_chatChannel = pc.createDataChannel('chatChannel');
+	_chatChannel = pc.createDataChannel('chatChannel', {
+		ordered: false
+	});
 	for (var i = 0 ; i < NUM_FILE_CHANNELS; i++) {
 		var channel = pc.createDataChannel('fileChannel-' + i);
 		_fileChannels.push(channel);
@@ -297,6 +306,10 @@ function setupFileChannel(channel){
 
 	channel.onopen = function(e) {
 		console.log('file channel' + channel.label + ' is open:', e);
+	};
+
+	channel.onerror = function(e) {
+		console.error("error", e);
 	};
 
 	channel.onmessage = function(e) {
@@ -371,22 +384,31 @@ function log_rate(channel, progress, elapsed) {
 }
 
 function sendFileinChannel(channel){
-	var chunkSize = (1 << 10) * (1 << 3);
-	var start = new Date().getTime();
+	var chunkSize = CHUNK_SIZE;
+	var start = averageSpeedCalculation.start = new Date().getTime();
   var sliceFile = function(offset) {
     var reader = new window.FileReader();
     reader.onload = (function() {
-      return function(e) {
+      return function(fp) {
       	if (channel.readyState !== "open") {
 					// window.setTimeout(sliceFile, 0, offset + chunkSize);
 					return;
 				}
-      	//console.log('sending from: ' + channel.label);
-        channel.send(e.target.result);
-        if (file.size > offset + e.target.result.byteLength) {
+				if (channel.bufferedAmount >= HIGH_WATERMARK) {
+					window.setTimeout(sliceFile, 0, offset);
+					return;
+				}
+				channel.send(fp.target.result);
+        if (file.size > offset + fp.target.result.byteLength) {
           window.setTimeout(sliceFile, 0, offset + chunkSize);
-        }
-        var bytesRead = e.target.result.byteLength;
+        } else {
+					averageSpeedCalculation.end = new Date().getTime();
+					elapsed = averageSpeedCalculation.end - averageSpeedCalculation.start;
+					var rate = ((file.size/elapsed)*1e3/(1<<20)).toFixed(2) + "MB/s";
+					averageSpeed.innerHTML = rate;
+        	console.log("Done sending!");
+				}
+        var bytesRead = fp.target.result.byteLength;
 				var elapsed = new Date().getTime() - start;
 				var progress = offset + bytesRead;
 				channel.txProgressBar.value = progress;
